@@ -10,16 +10,6 @@
 #   "os"
 # ]
 
-import argparse
-import os
-import pandas as pd
-import requests
-from ydata_profiling import ProfileReport
-import re
-import os
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 def process_json(data, threshold=510, sub_json_threshold=10):
     allowed_keys = ['n_distinct', 'p_distinct', 'is_unique', 'n_unique', 'p_unique', 'type', 
                     'hashable', 'ordering', 'n_missing', 'n', 'p_missing', 'count', 'memory_size', 
@@ -70,7 +60,7 @@ def load_dataset(file_path):
         return None, f"Error loading CSV file: {e}"
 
 # Perform basic analysis
-def basic_analysis(df):
+def robust_analysis(df):
     try:
         summary = {
             "head": df.head().to_dict(),
@@ -83,6 +73,7 @@ def basic_analysis(df):
 
 # Interact with API endpoint for insights
 def get_llm_insights(prompt, max_tokens=1000):
+    import requests
     try:
         api_endpoint = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
         headers = {
@@ -123,7 +114,7 @@ def generate_story_with_visuals(finalString):
 
 # Generate targeted questions and analyze with AI
 def generate_questions_and_analyze(df, profile_json):
-    basic = basic_analysis(df)
+    analysis = robust_analysis(df)
     
     question = "Based on the Table Information, context, Variables and Alerts generate 5 interesting sub-questions separated by commas ended by '?', that can help predict future trends based on the dataset."
     question +="Additionally, select variable names for each question which can help to find answers for the question. Provide the variable names as a list [] at the end."
@@ -134,7 +125,7 @@ def generate_questions_and_analyze(df, profile_json):
     alerts_info = profile_json.get("alerts", [])
 
     prompt = (
-        f"context:\n{basic}\n\n"
+        f"context:\n{analysis}\n\n"
         f"Table Information:\n{table_info}\n\n"
         f"Variables:\n{', '.join(variables_info)}\n\n"
         f"Alerts:\n{alerts_info}\n\n"
@@ -172,7 +163,7 @@ def generate_questions_and_analyze(df, profile_json):
 
     # Combine all responses
     detailed_analysis = "\n\n".join(detailed_responses)
-    final_string = f"dataset:{basic}\nDetailed Analysis:\n{detailed_analysis}"
+    final_string = f"dataset:{analysis}\nDetailed Analysis:\n{detailed_analysis}"
     story, error = generate_story_with_visuals(final_string)
 
     if error:
@@ -180,13 +171,6 @@ def generate_questions_and_analyze(df, profile_json):
         return
     
     return story
-    
-
-import os
-import re
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 def execute_graph_code(data, story, output_path):
     """
@@ -262,6 +246,15 @@ def narrate_to_markdown(df, story, output_path):
 
 # Main function
 def main():
+    import argparse
+    import os
+    import pandas as pd
+    from ydata_profiling import ProfileReport
+    import re
+    import os
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
     parser = argparse.ArgumentParser(description="AI-Powered Dataset Analysis Agent")
     parser.add_argument("csv_file", help="Path to the CSV file")
     args = parser.parse_args()
