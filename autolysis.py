@@ -10,6 +10,16 @@
 #   "os"
 # ]
 
+import argparse
+import os
+import pandas as pd
+import requests
+from ydata_profiling import ProfileReport
+import re
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 def process_json(data, threshold=510, sub_json_threshold=10):
     allowed_keys = ['n_distinct', 'p_distinct', 'is_unique', 'n_unique', 'p_unique', 'type', 
                     'hashable', 'ordering', 'n_missing', 'n', 'p_missing', 'count', 'memory_size', 
@@ -73,7 +83,6 @@ def robust_analysis(df):
 
 # Interact with API endpoint for insights
 def get_llm_insights(prompt, max_tokens=1000):
-    import requests
     try:
         api_endpoint = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
         headers = {
@@ -171,6 +180,7 @@ def generate_questions_and_analyze(df, profile_json):
         return
     
     return story
+    
 
 def execute_graph_code(data, story, output_path):
     """
@@ -246,15 +256,6 @@ def narrate_to_markdown(df, story, output_path):
 
 # Main function
 def main():
-    import argparse
-    import os
-    import pandas as pd
-    from ydata_profiling import ProfileReport
-    import re
-    import os
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
     parser = argparse.ArgumentParser(description="AI-Powered Dataset Analysis Agent")
     parser.add_argument("csv_file", help="Path to the CSV file")
     args = parser.parse_args()
