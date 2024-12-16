@@ -1,11 +1,26 @@
+# requires-python = ">=3.11"
+# dependencies = [
+#   "json",
+#   "pandas",
+#   "matplotlib",
+#   "seaborn",
+#   "requests",
+#   "ydata-profiling",
+#   "re",
+#   "os",
+#   "matplotlib.pyplot"
+#   "seaborn"
+# ]
+
 import argparse
 import os
 import pandas as pd
+import requests
+from ydata_profiling import ProfileReport
+import re
+import os
 import matplotlib.pyplot as plt
 import seaborn as sns
-import requests
-import json
-from ydata_profiling import ProfileReport
 
 def process_json(data, threshold=510, sub_json_threshold=10):
     allowed_keys = ['n_distinct', 'p_distinct', 'is_unique', 'n_unique', 'p_unique', 'type', 
@@ -23,7 +38,7 @@ def process_json(data, threshold=510, sub_json_threshold=10):
             if 'variables' in data:
                 data['variables'] = {k: {sub_k: sub_v for sub_k, sub_v in v.items() if sub_k in allowed_keys} 
                                      for k, v in data['variables'].items()}
-            return {k: filter_json(v) for k, v in data.items() if k not in ["value_counts_without_nan", "value_counts_index_sorted", "histogram", "scatter", "analysis", "sample", "package", "duplicates", "bar", "matrix", "time_index_analysis"] and not (isinstance(v, (dict, list)) and len(v) > threshold)}
+            return {k: filter_json(v) for k, v in data.items() if k not in ["missing", "value_counts_without_nan", "value_counts_index_sorted", "histogram", "scatter", "analysis", "sample", "package", "duplicates", "bar", "matrix", "time_index_analysis"] and not (isinstance(v, (dict, list)) and len(v) > threshold)}
         elif isinstance(data, list):
             return [filter_json(item) for item in data if not (isinstance(item, (dict, list)) and len(item) > threshold)]
         else:
@@ -68,54 +83,12 @@ def basic_analysis(df):
     except Exception as e:
         return None, f"Error during basic analysis: {e}"
 
-# Generate visualizations
-def generate_visualizations(df, output_dir):
-    try:
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        # Correlation Heatmap
-        heatmap_path = os.path.join(output_dir, "correlation_heatmap.png")
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(df.select_dtypes(include='number').corr(), annot=True, cmap="coolwarm")
-        plt.title("Correlation Heatmap")
-        plt.savefig(heatmap_path)
-        plt.close()
-
-        # Null Value Count
-        null_counts = df.isnull().sum()
-        null_counts_path = None
-        if null_counts.sum() > 0:
-            null_counts_path = os.path.join(output_dir, "null_value_counts.png")
-            null_counts[null_counts > 0].plot(kind="bar", figsize=(10, 6))
-            plt.title("Null Value Counts")
-            plt.savefig(null_counts_path)
-            plt.close()
-
-        # Distribution of Numeric Columns
-        numeric_distributions_path = None
-        numeric_cols = df.select_dtypes(include='number')
-        if not numeric_cols.empty:
-            numeric_distributions_path = os.path.join(output_dir, "numeric_distributions.png")
-            numeric_cols.hist(figsize=(12, 10), bins=20)
-            plt.suptitle("Distributions of Numeric Columns")
-            plt.savefig(numeric_distributions_path)
-            plt.close()
-
-        return {
-            "heatmap": heatmap_path,
-            "null_counts": null_counts_path,
-            "distributions": numeric_distributions_path
-        }, None
-    except Exception as e:
-        return None, f"Error during visualization generation: {e}"
-
 # Interact with API endpoint for insights
 def get_llm_insights(prompt, max_tokens=1000):
     try:
         api_endpoint = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
         headers = {
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIyZjMwMDE2NjJAZHMuc3R1ZHkuaWl0bS5hYy5pbiJ9.f565ymhpgn7zsGSjaPc2RHHgIHqYVu7Xxqw6l1XASKk",
+            "Authorization": f"Bearer {os.getenv('AIPROXY_TOKEN')}",
             "Content-Type": "application/json"
         }
         payload = {
@@ -123,27 +96,28 @@ def get_llm_insights(prompt, max_tokens=1000):
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens
         }
-
-        print("Prompt: ", prompt)
-        response = requests.post(api_endpoint, headers=headers, json=payload, timeout=20)
+        print("sent prompt.")
+        response = requests.post(api_endpoint, headers=headers, json=payload)
         response.raise_for_status()
-
+        print("received response.")
         response_str = response.json()["choices"][0]["message"]["content"].strip()
-        print("Response: ", response_str + "\n")
-        
         return response_str, None
     except Exception as e:
         return None, f"Error fetching insights from API endpoint: {e}"
 
 def generate_story_with_visuals(finalString):
     prompt = (
-        f"Please create a professional and engaging narrative based on the following analysis. "
-        f"Start with a brief introduction of the dataset and the analysis performed. "
-        f"Highlight key insights and their implications, and suggest actions based on these findings. "
-        f"Include up to three graphs that best illustrate the points, and provide the code to generate these graphs in square brackets. "
-        f"Ensure the column names are accurate and the narrative is compelling.\n\n"
+        f"Instructions to follow:"
+        f"Create a professional narrative based on the following analysis. "
+        f"Start with a catchy title, then describe the dataset, and an overview of the analysis performed. "
+        f"Highlight key insights, their implications, and suggest actions based on these findings. "
+        f"Include up to three graphs in between the insights that best illustrate the insights points, and provide the code to generate these graphs in code block ```python(.*?)``` like this. 'data' is the dataframe of file variable. use only matplotlib.pyplot as plt and seaborn as sns. Each code will be executed separately so donot create dependent variables."
+        f"Ensure the column names are accurate and the narrative is compelling. "
+        f"Keep images small. 512x512 px images are ideal. That's the size of 1 tile. Or, send detail: low. Do not add any placeholders. "
+        f"Begin with suspense and conclude effectively with subheadings.\n\n"
         f"Analysis:\n{finalString}\n\n"
     )
+    print("Final report.")
     story, error = get_llm_insights(prompt, max_tokens=2000)
     if error:
         return f"Error generating story: {error}", None
@@ -151,16 +125,22 @@ def generate_story_with_visuals(finalString):
 
 
 # Generate targeted questions and analyze with AI
-def generate_questions_and_analyze(df):
-    # Ask the 5th question to generate sub-questions
-    context = []
+def generate_questions_and_analyze(df, profile_json):
+    basic = basic_analysis(df)
+    
+    question = "Based on the Table Information, context, Variables and Alerts generate 5 interesting sub-questions separated by commas ended by '?', that can help predict future trends based on the dataset."
+    question +="Additionally, select variable names for each question which can help to find answers for the question. Provide the variable names as a list [] at the end."
+    question += "do not return anything else."
 
-    question = (
-        "Based on the dataset summary and context, generate 4 interesting sub-questions separated by commas, that can help predict future trend based on dataset. Do not return anything else."
-    )
+    table_info = profile_json.get("table", {})
+    variables_info = profile_json.get("variables", {}).keys()
+    alerts_info = profile_json.get("alerts", [])
 
     prompt = (
-        f"context:\n{context}\n\n"
+        f"context:\n{basic}\n\n"
+        f"Table Information:\n{table_info}\n\n"
+        f"Variables:\n{', '.join(variables_info)}\n\n"
+        f"Alerts:\n{alerts_info}\n\n"
         f"Question: {question}"
     )
 
@@ -169,79 +149,149 @@ def generate_questions_and_analyze(df):
         return f"Error generating sub-questions: {error}"
 
     # Split the sub-questions by commas
-    sub_questions = [q.strip() for q in sub_questions_text.split(",") if q.strip()]
+    sub_questions = [q.strip() for q in sub_questions_text.split("?,") if q.strip()]
 
     # Answer each sub-question using the context of the first four questions
     detailed_responses = []
-    context_text = "\n".join(context)
-    for i, sub_question in enumerate(sub_questions, 1):
-        detailed_prompt = (
-            f"Context from previous answers:\n{context_text}\n\n"
-            f"Sub-question {i}: {sub_question}"
-        )
-        detailed_response, error = get_llm_insights(detailed_prompt)
-        if error:
-            detailed_responses.append(f"Error for Sub-question {i}: {error}")
-        else:
-            detailed_responses.append(f"{i}. {detailed_response.strip()}")
+
+    # Extract variables from sub-questions and add to context
+    for sub_question in sub_questions:
+        if "[" in sub_question and "]" in sub_question:
+            variables = sub_question[sub_question.index("[")+1:sub_question.index("]")].split(",")
+            for var in variables:
+                var = var.strip()
+                if var in profile_json.get("variables", {}):
+                    detailed_prompt = (
+                        f"Summary from data: \n {var} : {profile_json['variables'][var]}\n\n"
+                        f"Sub-question: {sub_question}"
+                        f"Based on Summary from data answer the Sub-question analytically."
+                    )
+
+                    detailed_response, error = get_llm_insights(detailed_prompt)
+                    if error:
+                        pass
+                    else:
+                        detailed_responses.append(f"Question:{sub_question} \n Answer:{detailed_response.strip()}")
 
     # Combine all responses
-    insights = "\n".join(context)
-    detailed_analysis = "\n".join(detailed_responses)
-    final_string = f"Insights:\n{insights}\n\nSub-questions:\n{sub_questions_text}\n\nDetailed Analysis:\n{detailed_analysis}"
-
+    detailed_analysis = "\n\n".join(detailed_responses)
+    final_string = f"dataset:{basic}\nDetailed Analysis:\n{detailed_analysis}"
     story, error = generate_story_with_visuals(final_string)
+
     if error:
         print(error)
         return
     
     return story
+    
 
-# Narrate findings to README.md
-def narrate_to_markdown(image_paths, story, output_path):
+import os
+import re
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+def execute_graph_code(data, story, output_path):
+    """
+    Processes a story containing embedded Python code blocks, executes them,
+    saves generated graphs, and replaces code blocks with image references.
+    """
     try:
+        # Validate output_path
+        if not os.path.exists(output_path):
+            raise FileNotFoundError(f"Output directory '{output_path}' does not exist.")
+
+        code_blocks = re.findall(r'```python(.*?)```\s', story, re.DOTALL)
+
+        if not code_blocks:
+            raise ValueError("No Python code blocks found in the story.")
+
+        image_paths = []
+
+        # Loop through and process each code block
+        for i, code_block in enumerate(code_blocks):
+            try:
+                # Strip leading spaces from each line in the code block
+                clean_code = "\n".join(line.lstrip() for line in code_block.splitlines())
+
+                # Generate unique file name for the image
+                image_filename = f"graph_{i + 1}.png"
+                image_path = os.path.join(output_path, image_filename)
+                image_paths.append(image_path)
+
+                # Execute code block in a sandboxed scope
+                local_scope = {"plt": plt, "data": data, "df": data, "sns": sns}
+                exec(clean_code, globals(), local_scope)
+
+                # Save the graph
+                plt.savefig(image_path)
+                plt.close()
+
+            except Exception as e:
+                print(f"Error executing code block {i + 1}: {e}")
+                image_paths.append(None)  # Mark as failed
+                continue
+
+        # Replace code blocks with image markdown
+        for i, code_block in enumerate(code_blocks):
+            image_markdown = f"![Graph {i + 1}]({image_paths[i]})" if image_paths[i] else f"[Error in Graph {i + 1}]"
+            # Use regex to ensure robust replacement
+            story = re.sub(
+                re.escape(f'```python{code_block}```'),
+                image_markdown,
+                story,
+                count=1
+            )
+
+        return story, None
+    except Exception as e:
+        return None, f"Error executing graph code: {e}"
+
+# Update narrate_to_markdown function to include graph execution
+def narrate_to_markdown(df, story, output_path):
+    try:
+        # Execute graph code and update story with image paths
+        story, error = execute_graph_code(df, story, output_path)
+        if error:
+            return error
+
         readme_path = os.path.join(output_path, "README.md")
         with open(readme_path, "w") as f:
-            f.write("## Visualization URLs\n")
-            for key, path in image_paths.items():
-                if path:
-                    f.write(f"- {key.capitalize()}: ![View]({path})\n")
             if story:
                 f.write(story + "\n")
         return None
     except Exception as e:
         return f"Error during Markdown narration: {e}"
 
-
 # Main function
 def main():
-    # parser = argparse.ArgumentParser(description="AI-Powered Dataset Analysis Agent")
-    # parser.add_argument("csv_file", help="Path to the CSV file")
-    # parser.add_argument("output_dir", nargs="?", default="output", help="Directory to save the outputs (default: output)")
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="AI-Powered Dataset Analysis Agent")
+    parser.add_argument("csv_file", help="Path to the CSV file")
+    args = parser.parse_args()
+    csv_file_path = args.csv_file
 
-    # Load dataset
-    df, error = load_dataset("goodreads.csv")
-    if error:
-        print(error)
+    # Check if file exists and load dataset
+    if not os.path.isfile(csv_file_path):
+        print(f"Error: File {csv_file_path} does not exist.")
         return
 
-    # Perform analysis
-    analysis_summary, error = basic_analysis(df)
+    df, error = load_dataset(csv_file_path)
     if error:
         print(error)
         return
     
     profile = ProfileReport(df, title="Pandas Profiling Report")
-    profile_json = profile.to_json()
+    import json
+    profile_json_str = profile.to_json()
+    profile_json = json.loads(profile_json_str)
     profile_json = process_json(profile_json)
     
-
-    # Generate questions and analyze with AI
-    insights = generate_questions_and_analyze(df)
+    # # Generate questions and analyze with AI
+    insights = generate_questions_and_analyze(df, profile_json)
+    print(insights)
 
     # Narrate findings
-    error = narrate_to_markdown(image_paths, insights, "./")
+    error = narrate_to_markdown(df, insights, "./")
     if error:
         print(error)
         return
