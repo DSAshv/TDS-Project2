@@ -2,7 +2,6 @@
 # dependencies = [
 #   "json",
 #   "pandas",
-#   "requests",
 #   "ydata-profiling",
 #   "re",
 #   "os",
@@ -13,7 +12,6 @@
 import argparse
 import os
 import pandas as pd
-import requests
 from ydata_profiling import ProfileReport
 import re
 import matplotlib.pyplot as plt
@@ -122,21 +120,23 @@ def get_llm_insights(prompt, max_tokens=1000):
         tuple: A tuple containing the response string and an error message (if any).
     """
     try:
-        api_endpoint = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+        import http.client
+
+        conn = http.client.HTTPSConnection("aiproxy.sanand.workers.dev")
         headers = {
             "Authorization": f"Bearer {os.getenv('AIPROXY_TOKEN')}",
             "Content-Type": "application/json"
         }
-        payload = {
+        payload = json.dumps({
             "model": "gpt-4o-mini",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens
-        }
-        print("sent prompt.")
-        response = requests.post(api_endpoint, headers=headers, json=payload)
-        response.raise_for_status()
-        print("received response.")
-        response_str = response.json()["choices"][0]["message"]["content"].strip()
+        })
+        conn.request("POST", "/openai/v1/chat/completions", payload, headers)
+        response = conn.getresponse()
+        data = response.read().decode("utf-8")
+        response_json = json.loads(data)
+        response_str = response_json["choices"][0]["message"]["content"].strip()
         return response_str, None
     except Exception as e:
         return None, f"Error fetching insights from API endpoint: {e}"
