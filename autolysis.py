@@ -1,7 +1,6 @@
 # /// script
 # requires-python = ">=3.13"
 # dependencies = [
-#   "json",
 #   "pandas",
 #   "matplotlib",
 #   "seaborn",
