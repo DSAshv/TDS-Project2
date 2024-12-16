@@ -6,8 +6,6 @@
 #   "seaborn",
 #   "requests",
 #   "ydata-profiling",
-#   "re",
-#   "os"
 # ]
 # ///
 
@@ -16,7 +14,6 @@ import os
 import pandas as pd
 import requests
 from ydata_profiling import ProfileReport
-import re
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -201,6 +198,7 @@ def execute_graph_code(data, story, output_path):
     saves generated graphs, and replaces code blocks with image references.
     """
     try:
+        import re
         # Validate output_path
         if not os.path.exists(output_path):
             raise FileNotFoundError(f"Output directory '{output_path}' does not exist.")
