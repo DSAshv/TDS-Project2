@@ -1,4 +1,4 @@
-#/// script
+# /// script
 # requires-python = ">=3.13"
 # dependencies = [
 #   "json",
@@ -136,7 +136,7 @@ def generate_questions_and_analyze(df, profile_json):
     Returns:
         str: The generated insights.
     """
-    
+
     analysis = robust_analysis(df)
     
     question = "Based on the Table Information, context, Variables and Alerts generate 5 interesting sub-questions separated by commas ended by '?', that can help predict future trends based on the dataset."
