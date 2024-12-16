@@ -11,6 +11,14 @@
 
 import argparse
 import os
+import pandas as pd
+from ydata_profiling import ProfileReport
+import re
+import matplotlib.pyplot as plt
+import seaborn as sns
+import matplotlib
+import numpy as np
+matplotlib.use('Agg')
 
 def install_packages(packages):
     for package in packages:
@@ -20,14 +28,6 @@ def install_packages(packages):
 required_packages = ['ydata-profiling', 'pandas', 'seaborn', 'matplotlib']
 install_packages(required_packages)
 
-import pandas as pd
-from ydata_profiling import ProfileReport
-import re
-import matplotlib.pyplot as plt
-import seaborn as sns
-import matplotlib
-import numpy as np
-matplotlib.use('Agg')
 
 def process_json(data, threshold=510, sub_json_threshold=10):
     """
