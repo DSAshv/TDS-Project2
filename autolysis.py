@@ -1,4 +1,5 @@
-# requires-python = ">=3.11"
+#/// script
+# requires-python = ">=3.13"
 # dependencies = [
 #   "json",
 #   "pandas",
@@ -9,6 +10,7 @@
 #   "re",
 #   "os"
 # ]
+# ///
 
 import argparse
 import os
@@ -16,11 +18,21 @@ import pandas as pd
 import requests
 from ydata_profiling import ProfileReport
 import re
-import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 def process_json(data, threshold=510, sub_json_threshold=10):
+    """
+    Filters and processes a JSON object to remove unwanted keys and large sub-objects.
+
+    Args:
+        data (dict): The JSON data to process.
+        threshold (int): The maximum allowed size for sub-objects.
+        sub_json_threshold (int): The threshold for listing sub-objects.
+
+    Returns:
+        dict: The filtered JSON data.
+    """
     allowed_keys = ['n_distinct', 'p_distinct', 'is_unique', 'n_unique', 'p_unique', 'type', 
                     'hashable', 'ordering', 'n_missing', 'n', 'p_missing', 'count', 'memory_size', 
                     'first_rows', 'max_length', 'mean_length', 'median_length', 'min_length', 
@@ -42,44 +54,35 @@ def process_json(data, threshold=510, sub_json_threshold=10):
         else:
             return data
 
-    def list_sub_json(data):
-        if isinstance(data, dict):
-            for k, v in data.items():
-                if isinstance(v, (dict, list)) and len(v) > sub_json_threshold:
-                    print(f"Key: {k}, Number of values: {len(v)}")
-                list_sub_json(v)
-        elif isinstance(data, list):
-            for item in data:
-                list_sub_json(item)
-
-    try:
-        filtered_data = filter_json(data)
-        list_sub_json(filtered_data)
-        return filtered_data
-    
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+    return filter_json(data)
 
 # Function to load and validate dataset
 def load_dataset(file_path):
-    if not os.path.exists(file_path):
-        return None, f"Error: File {file_path} does not exist."
-    try:
-        return pd.read_csv(file_path), None
-    except Exception as e:
-        return None, f"Error loading CSV file: {e}"
+    """
+    Loads a dataset from a given file path.
+
+    Args:
+        file_path (str): The path to the dataset file.
+
+    Returns:
+        DataFrame: The loaded dataset.
+    """
+    return pd.read_csv(file_path)
 
 # Perform basic analysis
 def robust_analysis(df):
-    try:
-        summary = {
-            "head": df.head().to_dict(),
-            "description": df.describe(include='all').to_dict(),
-            "null_counts": df.isnull().sum().to_dict()
-        }
-        return summary, None
-    except Exception as e:
-        return None, f"Error during basic analysis: {e}"
+    """
+    Performs a robust analysis on the given DataFrame.
+
+    Args:
+        df (DataFrame): The DataFrame to analyze.
+
+    Returns:
+        ProfileReport: The profiling report of the DataFrame.
+    """
+    profile = ProfileReport(df, title="Pandas Profiling Report")
+    profile.to_file("output.html")
+    return profile
 
 # Interact with API endpoint for insights
 def get_llm_insights(prompt, max_tokens=1000):
@@ -123,6 +126,17 @@ def generate_story_with_visuals(finalString):
 
 # Generate targeted questions and analyze with AI
 def generate_questions_and_analyze(df, profile_json):
+    """
+    Generates questions and performs analysis based on the DataFrame and its profile.
+
+    Args:
+        df (DataFrame): The DataFrame to analyze.
+        profile_json (dict): The JSON profile of the DataFrame.
+
+    Returns:
+        str: The generated insights.
+    """
+    
     analysis = robust_analysis(df)
     
     question = "Based on the Table Information, context, Variables and Alerts generate 5 interesting sub-questions separated by commas ended by '?', that can help predict future trends based on the dataset."
