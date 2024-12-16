@@ -11,6 +11,15 @@
 
 import argparse
 import os
+
+def install_packages(packages):
+    for package in packages:
+        install_package(package)
+
+# List of required packages
+required_packages = ['ydata-profiling', 'pandas', 'seaborn', 'matplotlib']
+install_packages(required_packages)
+
 import pandas as pd
 from ydata_profiling import ProfileReport
 import re
